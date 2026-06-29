@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.db
+*.duckdb
+*.log
+.git
+.venv
+mzansilm/mzansilm-125m.gguf
+mzansilm/llama_cpp
+mzansilm/mzansilm-125m

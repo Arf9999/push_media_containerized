@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  pipeline:
+    platform: linux/amd64
+    build:
+      context: ./pipeline
+      dockerfile: Dockerfile
+    container_name: beta_pipeline_web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DUCKDB_PATH=/app/data/newsletters.db
+      - USERS_DB_PATH=/app/data/users.db
+      - SOURCES_DB_PATH=/app/data/sources.db
+      - LAST_EMAIL_ID_FILE=/app/data/last_email_id.txt
+      - FORENSIC_LOG_PATH=/app/data/FORENSIC_LOG
+      # Add other config overrides here if needed (e.g. LLM_PROVIDER, OPENROUTER_API_KEY)
+
+  survey:
+    platform: linux/amd64
+    build:
+      context: ./survey
+      dockerfile: Dockerfile
+    container_name: beta_survey_web
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - SURVEY_DB_PATH=/app/data/sources.db
+      - SURVEY_LOG_DIR=/app/data/logs

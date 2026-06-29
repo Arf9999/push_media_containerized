@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regional Media Ingestion Survey</title>
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="background-gradients">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header glass">
+            <div class="header-main">
+                <div class="logo-area">
+                    <span class="icon-pulse">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </span>
+                    <div>
+                        <h1>Regional Media Ingestion Survey</h1>
+                        <p class="subtitle">Phase 2 - Landscape Mapping & Source Audit</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                <div id="userInfoDisplay" class="user-info-badge hidden" style="margin-right: 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-dim);">
+                    <span>Auditor: <strong id="currentUserLabel" style="color: var(--color-text);"></strong></span>
+                    <button id="logoutBtn" style="background: none; border: none; color: var(--color-accent-red); cursor: pointer; text-decoration: underline; font-size: 11px; padding: 0;">(Switch User)</button>
+                </div>
+                <div class="toggle-container">
+                    <span class="toggle-label">Admin Mode</span>
+                    <label class="switch">
+                        <input type="checkbox" id="adminModeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <section class="stats-grid">
+            <div class="stat-card glass">
+                <div class="stat-icon icon-blue">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div class="stat-info">
+                    <h3>Total Active Sources</h3>
+                    <div class="stat-values">
+                        <span class="stat-number" id="statTotalActive">0</span>
+                        <span class="stat-badge badge-green" id="statVerifiedCount">0 Verified</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card glass">
+                <div class="stat-icon icon-purple">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+                </div>
+                <div class="stat-info">
+                    <h3>Platforms Breakdowns</h3>
+                    <div class="stat-subtext" id="statPlatforms">
+                        TG: 0 | RSS: 0 | NL: 0
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card glass">
+                <div class="stat-icon icon-emerald">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div class="stat-info">
+                    <h3>Mapped Countries</h3>
+                    <span class="stat-number" id="statCountries">0</span>
+                </div>
+            </div>
+
+            <div id="trashStatCard" class="stat-card glass admin-only hidden">
+                <div class="stat-icon icon-red">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </div>
+                <div class="stat-info">
+                    <h3>Soft-Deleted Sources</h3>
+                    <span class="stat-number" id="statTotalDeleted">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Workspace Layout -->
+        <main class="workspace-layout">
+            <!-- Left Panel: Submission Form -->
+            <section class="form-panel glass">
+                <h2>Log Ingestion Source</h2>
+                <p class="panel-desc">All fields must comply with formatting and validation criteria.</p>
+
+                <form id="sourceForm" autocomplete="off">
+                    <!-- Platform Selector -->
+                    <div class="form-group">
+                        <label for="platform">Platform Category *</label>
+                        <select id="platform" required>
+                            <option value="telegram">Telegram Public Channel</option>
+                            <option value="rss">RSS / Web Feed Endpoint</option>
+                            <option value="newsletter">Email / Substack Newsletter</option>
+                            <option value="fediverse">Fediverse Link</option>
+                        </select>
+                    </div>
+
+                    <!-- Source Name -->
+                    <div class="form-group">
+                        <label for="sourceName">Source Name *</label>
+                        <input type="text" id="sourceName" placeholder="e.g. Naija Politics Watch" required>
+                        <div class="warning-msg hidden" id="nameWarning"></div>
+                    </div>
+
+                    <!-- Ingest URL -->
+                    <div class="form-group">
+                        <label for="ingestUrl">Ingest URL (Direct Endpoint) *</label>
+                        <input type="url" id="ingestUrl" placeholder="e.g. https://t.me/s/naijawatch" required>
+                        <div class="warning-msg hidden" id="urlWarning"></div>
+                        <div class="info-help" id="urlHelp">For Telegram, standard public t.me/username link. No invite links (+).</div>
+                    </div>
+
+                    <!-- Auditor Identifier -->
+                    <div class="form-group">
+                        <label for="inputBy">Auditor Name / Username</label>
+                        <input type="text" id="inputBy" readonly style="background: rgba(255, 255, 255, 0.03); border: 1px dashed var(--color-border); color: var(--color-text-dim); cursor: not-allowed;" required>
+                        <div class="info-help">Auto-populated from logged-in session.</div>
+                    </div>
+
+                    <!-- Metadata Grid -->
+                    <div class="form-row-grid">
+                        <div class="form-group">
+                            <label for="countrySelect">Country ISO *</label>
+                            <select id="countrySelect" required>
+                                <option value="NG">Nigeria (NG)</option>
+                                <option value="ZA">South Africa (ZA)</option>
+                                <option value="KE">Kenya (KE)</option>
+                                <option value="TZ">Tanzania (TZ)</option>
+                                <option value="UG">Uganda (UG)</option>
+                                <option value="RW">Rwanda (RW)</option>
+                                <option value="MZ">Mozambique (MZ)</option>
+                                <option value="AO">Angola (AO)</option>
+                                <option value="SN">Senegal (SN)</option>
+                                <option value="GH">Ghana (GH)</option>
+                                <option value="ZW">Zimbabwe (ZW)</option>
+                                <option value="BI">Burundi (BI)</option>
+                                <option value="CUSTOM">-- Custom ISO --</option>
+                            </select>
+                            <input type="text" id="countryCustom" placeholder="e.g. SD" class="hidden" minlength="2" maxlength="3" style="margin-top: 8px;">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="topicSelect">Topic / Theme *</label>
+                            <select id="topicSelect" required>
+                                <option value="POL">Politics (POL)</option>
+                                <option value="CLM">Climate (CLM)</option>
+                                <option value="ENG">Energy (ENG)</option>
+                                <option value="ECO">Economy / Inflation (ECO)</option>
+                                <option value="GEN">General News (GEN)</option>
+                                <option value="CON">Consumer News (CON)</option>
+                                <option value="CUL">Culture / Music / Art (CUL)</option>
+                                <option value="GOS">Gossip / Celebrity (GOS)</option>
+                                <option value="SPO">Sport (SPO)</option>
+                                <option value="TEC">Technology / Science (TEC)</option>
+                                <option value="OTH">Other / Unclassifiable (OTH)</option>
+                                <option value="CUSTOM">-- Custom Code --</option>
+                            </select>
+                            <input type="text" id="topicCustom" placeholder="e.g. TFN" class="hidden" minlength="2" maxlength="4" style="margin-top: 8px;">
+                        </div>
+                    </div>
+
+                    <div class="form-row-grid">
+                        <div class="form-group">
+                            <label for="primaryLanguage">Primary Language (ISO 639-1) *</label>
+                            <input type="text" id="primaryLanguage" placeholder="e.g. en" required minlength="2" maxlength="5">
+                            <div class="info-help">2-letter code (e.g. en, sw, fr, pt, zu)</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="publisherType">Publisher Type *</label>
+                            <select id="publisherType" required>
+                                <option value="independent_journalist">Independent Journalist</option>
+                                <option value="civil_society">Civil Society (CSO)</option>
+                                <option value="state_media">State Media</option>
+                                <option value="anonymous_influencer">Anonymous Influencer</option>
+                                <option value="consumer_news">Consumer News</option>
+                                <option value="cultural_music_art">Cultural/Music/Art</option>
+                                <option value="gossip_celebrity">Gossip/Celebrity</option>
+                                <option value="newsfluencer">Newsfluencer</option>
+                                <option value="mainstream_publication">Mainstream Publication</option>
+                                <option value="sport">Sport</option>
+                                <option value="technology_science">Technology/Science</option>
+                                <option value="pr_news_agency">PR/News agency</option>
+                                <option value="other">Other / Unclassifiable</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row-grid">
+                        <div class="form-group">
+                            <label for="languagesSpoken">Languages Present</label>
+                            <input type="text" id="languagesSpoken" placeholder="e.g. en; pcm; ha">
+                            <div class="info-help">Semicolon-separated codes</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="geographicFocus">Geographic Focus *</label>
+                            <input type="text" id="geographicFocus" placeholder="e.g. Nigeria; Lagos State" required>
+                            <div class="info-help">Country/region scope</div>
+                        </div>
+                    </div>
+
+                    <!-- Technical Audit Checkboxes -->
+                    <div class="technical-audits">
+                        <h3>Technical Viability Audit *</h3>
+                        <p class="panel-desc" style="margin-bottom: 12px;">Confirm all downstream pipeline eligibility requirements are satisfied:</p>
+                        
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="gatingPassed" required>
+                            <span class="checkmark"></span>
+                            <span class="checkbox-text">Gating Check: No hard paywalls, logins, or CAPTCHAs.</span>
+                        </label>
+
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="activityPassed" required>
+                            <span class="checkmark"></span>
+                            <span class="checkbox-text">Activity Check: Active publication within the last 30 days.</span>
+                        </label>
+
+                        <label class="checkbox-container" id="tgCheckContainer">
+                            <input type="checkbox" id="telegramPassed" required>
+                            <span class="checkmark"></span>
+                            <span class="checkbox-text">Telegram Check: Strictly public channel (no private hash/invite links).</span>
+                        </label>
+                    </div>
+
+                    <!-- Error Alert -->
+                    <div class="error-banner hidden" id="formError"></div>
+                    <!-- Success Alert -->
+                    <div class="success-banner hidden" id="formSuccess"></div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <span class="btn-text">Log Ingestion Source</span>
+                        <div class="spinner hidden" id="btnSpinner"></div>
+                    </button>
+                </form>
+            </section>
+
+            <!-- Right Panel: Data Explorer -->
+            <section class="explorer-panel glass">
+                <div class="explorer-header">
+                    <div class="explorer-title-area">
+                        <h2>Ingested Sources Directory</h2>
+                        <p class="panel-desc">Review, filter, and audit recorded media ingestion endpoints.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="manageAuditorsBtn" class="download-btn admin-only hidden" style="background: rgba(255,255,255,0.05); border: 1px solid var(--color-border);">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            Manage Auditors
+                        </button>
+                        <button id="downloadCsvBtn" class="download-btn admin-only hidden">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download CSV Table
+                        </button>
+                        <button id="downloadLogBtn" class="download-btn admin-only hidden" style="background: rgba(255,255,255,0.05); border: 1px solid var(--color-border);">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            Download Activity Log
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters & Search Toolbar -->
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="searchInput" placeholder="Search sources by ID, name, or URL...">
+                    </div>
+                    <div class="filter-controls">
+                        <button class="filter-btn active" data-platform="all">All</button>
+                        <button class="filter-btn" data-platform="telegram">Telegram</button>
+                        <button class="filter-btn" data-platform="rss">RSS</button>
+                        <button class="filter-btn" data-platform="newsletter">Newsletters</button>
+                        <button class="filter-btn" data-platform="fediverse">Fediverse</button>
+                    </div>
+                </div>
+
+                <!-- Admin specific toggles -->
+                <div class="admin-toggles admin-only hidden" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <label class="checkbox-container" style="margin-bottom: 0;">
+                        <input type="checkbox" id="showDeletedToggle">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-text" style="font-weight: 500; color: var(--color-text-dim);">Show Soft-Deleted Sources (Trash Bin)</span>
+                    </label>
+                    <div class="admin-user-filter" style="display: flex; align-items: center; gap: 8px;">
+                        <label for="adminUserFilterSelect" style="font-size: 13px; font-weight: 500; color: var(--color-text-dim);">Filter by Auditor:</label>
+                        <select id="adminUserFilterSelect" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--color-border); color: var(--color-text); border-radius: 6px; padding: 6px 12px; font-size: 13px; outline: none; transition: border-color 0.2s;">
+                            <option value="all">All Auditors</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-container">
+                    <table class="sources-table" id="sourcesTable">
+                        <thead>
+                            <tr>
+                                <th>Source ID</th>
+                                <th>Name</th>
+                                <th>Platform</th>
+                                <th>Ingest URL</th>
+                                <th>Language</th>
+                                <th>Publisher Type</th>
+                                <th>Status</th>
+                                <th class="actions-header admin-only hidden">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Dynamic Rows -->
+                            <tr>
+                                <td colspan="8" class="text-center">Loading sources data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Admin Passcode Modal -->
+    <div id="adminModal" class="modal-overlay hidden">
+        <div class="modal-content glass">
+            <h3>Coordinator Verification Required</h3>
+            <p style="font-size: 13px; color: var(--color-text-dim); margin-bottom: 12px;">Enabling verification controls and access capabilities requires the admin passcode.</p>
+            <input type="password" id="adminPasscode" placeholder="Enter Admin Passcode (default: admin123)" style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 14px; color: var(--color-text); font-family: var(--font-sans); width: 100%; outline: none; text-align: center;">
+            <div id="adminModalError" class="error-banner hidden" style="margin-top: 12px; margin-bottom: 0;"></div >
+            <div class="modal-actions" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px;">
+                <button id="cancelAdminBtn" style="background: rgba(255,255,255,0.05); color: var(--color-text); border: 1px solid var(--color-border); padding: 8px 16px; border-radius: 6px; font-family: var(--font-sans); cursor: pointer; transition: var(--transition-fast);">Cancel</button>
+                <button id="confirmAdminBtn" style="background: var(--color-primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: var(--font-sans); font-weight: 600; cursor: pointer; transition: var(--transition-fast);">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Screen Overlay -->
+    <div id="loginOverlay" class="modal-overlay hidden">
+        <div class="modal-content glass" style="max-width: 380px; text-align: center; display: flex; flex-direction: column; gap: 14px; padding: 32px 24px;">
+            <div style="font-size: 32px;">🌐</div>
+            <h2 id="loginTitle" style="font-size: 20px; font-weight: 700; color: var(--color-text);">Auditor Sign In</h2>
+            <p id="loginDesc" style="font-size: 13px; color: var(--color-text-dim); line-height: 1.4;">Sign in to your allocated Auditor account to log ingestion sources.</p>
+            
+            <input type="text" id="loginUsername" placeholder="Username" style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 14px; color: var(--color-text); font-family: var(--font-sans); width: 100%; outline: none; text-align: center; font-size: 14px;">
+            
+            <input type="password" id="loginPassword" placeholder="Password" style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--color-border); border-radius: 8px; padding: 10px 14px; color: var(--color-text); font-family: var(--font-sans); width: 100%; outline: none; text-align: center; font-size: 14px;">
+            
+            <div id="loginError" class="error-banner hidden" style="margin-top: 4px; margin-bottom: 0;"></div>
+            
+            <button id="loginBtn" style="background: var(--color-primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-family: var(--font-sans); font-weight: 600; cursor: pointer; transition: var(--transition-fast); width: 100%; font-size: 14px;">Sign In</button>
+        </div>
+    </div>
+
+    <!-- User Management Modal -->
+    <div id="adminAuditorsModal" class="modal-overlay hidden">
+        <div class="modal-content glass" style="max-width: 500px; width: 90%; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 18px;">Allocate Auditor Accounts</h3>
+                <button id="closeAuditorsModalBtn" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 24px; padding: 0; line-height: 1;">&times;</button>
+            </div>
+            
+            <!-- Create New User Form -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--color-border); padding: 14px; border-radius: 8px;">
+                <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-dim);">Allocate New Account</h4>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <input type="text" id="newAuditorUser" placeholder="Username (e.g. ra_david)" style="flex: 1; min-width: 130px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; color: var(--color-text); font-family: var(--font-sans); font-size: 13px; outline: none;">
+                    <input type="password" id="newAuditorPass" placeholder="Password" style="flex: 1; min-width: 130px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; color: var(--color-text); font-family: var(--font-sans); font-size: 13px; outline: none;">
+                    <button id="createAuditorBtn" style="background: var(--color-primary); color: white; border: none; padding: 8px 14px; border-radius: 6px; font-family: var(--font-sans); font-weight: 600; cursor: pointer; font-size: 13px; transition: var(--transition-fast);">Allocate</button>
+                </div>
+                <div id="newAuditorError" class="error-banner hidden" style="margin-top: 8px; margin-bottom: 0; font-size: 12px; padding: 6px 10px;"></div>
+                <div id="newAuditorSuccess" class="success-banner hidden" style="margin-top: 8px; margin-bottom: 0; font-size: 12px; padding: 6px 10px;"></div>
+            </div>
+
+            <!-- Existing Users List -->
+            <div>
+                <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-dim);">Active Auditors</h4>
+                <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 6px; background: rgba(0,0,0,0.15);">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--color-border); background: rgba(255,255,255,0.02);">
+                                <th style="padding: 8px 12px; color: var(--color-text-dim); font-weight: 500;">Username</th>
+                                <th style="padding: 8px 12px; color: var(--color-text-dim); font-weight: 500; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditorsListBody">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# Gitignore for Beta Pipeline Repository
+.venv/
+__pycache__/
+*.pyc
+*.log
+.Rhistory
+.RData
+.Rproj.user
+.Ruserdata
+
+# Ignore personal credentials but check in template or README instructions
+credentials.json
+pipeline/credentials.json
+
+# Ignore large database and local model files to comply with GitHub's 100MB file size limit
+data/
+pipeline/mzansilm/mzansilm-125m.gguf
+pipeline/mzansilm/llama_cpp/
+pipeline/mzansilm/mzansilm-125m/
