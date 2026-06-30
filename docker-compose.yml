@@ -19,6 +19,9 @@ services:
       - SOURCES_DB_PATH=/app/data/sources.db
       - LAST_EMAIL_ID_FILE=/app/data/last_email_id.txt
       - FORENSIC_LOG_PATH=/app/data/FORENSIC_LOG
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
       # Add other config overrides here if needed (e.g. LLM_PROVIDER, OPENROUTER_API_KEY)
 
   survey:
