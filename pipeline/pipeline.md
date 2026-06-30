@@ -1,5 +1,10 @@
 # Phase 2 Push Media Pipeline Architecture & Operations Manual
 
+> **Legacy architecture reference:** This document describes the original
+> DuckDB/SQLite design. The running implementation now uses PostgreSQL schemas
+> `corpus`, `dashboard`, and `survey`, with pgvector for semantic search. See
+> `../POSTGRES_MIGRATION.md` for the current mapping.
+
 This document provides a detailed technical reference for the Phase 2 Push Media Ingestion, Analysis, and Querying Pipeline.
 
 ```mermaid
