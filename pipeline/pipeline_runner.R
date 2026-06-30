@@ -407,25 +407,36 @@ run_pipeline <- function(rss_feeds = list(), telegram_channels = c(), subscripti
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 );
             "
+            # Ensure all bound parameters are of length 1 to avoid rapi_bind mismatch errors
+            safe_param <- function(val, default = NA_character_) {
+                if (is.null(val) || length(val) == 0) return(default)
+                if (length(val) > 1) return(val[1])
+                return(val)
+            }
+            safe_bool <- function(val, default = FALSE) {
+                if (is.null(val) || length(val) == 0 || is.na(val)) return(default)
+                return(as.logical(val)[1])
+            }
+            
             DBI::dbExecute(con, insert_sql, params = list(
-                rec$uid,
-                rec$datetime,
-                rec$source,
-                rec$sender,
-                rec$title,
-                rec$url,
-                rec$summary,
-                rec$original_language_summary,
-                rec$detected_language,
-                rec$truncated,
-                rec$content_type,
-                rec$topics,
-                rec$themes,
-                rec$keywords,
-                rec$subscription_marketing,
-                list(rec$english_embedding),
+                safe_param(rec$uid),
+                rec$datetime, # POSIXct
+                safe_param(rec$source),
+                safe_param(rec$sender),
+                safe_param(rec$title),
+                safe_param(rec$url),
+                safe_param(rec$summary),
+                safe_param(rec$original_language_summary),
+                safe_param(rec$detected_language),
+                safe_bool(rec$truncated),
+                safe_param(rec$content_type),
+                safe_param(rec$topics),
+                safe_param(rec$themes),
+                safe_param(rec$keywords),
+                safe_bool(rec$subscription_marketing),
+                list(rec$english_embedding), # List columns
                 list(rec$multilingual_embedding),
-                rec$raw_email
+                safe_param(rec$raw_email)
             ))
             
             if (!is.null(rec$entities) && is.data.frame(rec$entities) && nrow(rec$entities) > 0) {
