@@ -12,6 +12,7 @@ services:
       - "8080:8080"
     volumes:
       - ./data:/app/data
+      - ./pipeline/credentials.json:/app/credentials.json:ro
     environment:
       - DUCKDB_PATH=/app/data/newsletters.db
       - USERS_DB_PATH=/app/data/users.db
