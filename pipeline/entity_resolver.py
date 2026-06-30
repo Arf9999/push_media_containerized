@@ -1,6 +1,3 @@
-import sqlite3
-import duckdb
-
 def jaro_distance(s1, s2):
     if not s1 or not s2:
         return 0.0
@@ -57,15 +54,15 @@ def resolve_entity(raw_name, entity_type, con, threshold=0.88):
         return None
         
     # 1. Check exact match in lexicon (case-insensitive)
-    query = "SELECT canonical_name FROM entity_lexicon WHERE LOWER(raw_name) = LOWER(?);"
-    res = con.execute(query, [raw_name_clean]).fetchall()
+    query = "SELECT canonical_name FROM corpus.entity_lexicon WHERE LOWER(raw_name) = LOWER(%s);"
+    res = con.execute(query, (raw_name_clean,)).fetchall()
     
     if res:
         return res[0][0]
         
     # 2. Fetch distinct canonical names for same type
-    lexicon_query = "SELECT DISTINCT canonical_name FROM entity_lexicon WHERE entity_type = ?;"
-    existing_canonicals = [r[0] for r in con.execute(lexicon_query, [entity_type]).fetchall()]
+    lexicon_query = "SELECT DISTINCT canonical_name FROM corpus.entity_lexicon WHERE entity_type = %s;"
+    existing_canonicals = [r[0] for r in con.execute(lexicon_query, (entity_type,)).fetchall()]
     
     best_similarity = 0.0
     best_canonical = raw_name_clean
@@ -82,10 +79,11 @@ def resolve_entity(raw_name, entity_type, con, threshold=0.88):
     
     # 4. Insert mapping
     insert_query = """
-        INSERT OR IGNORE INTO entity_lexicon (raw_name, canonical_name, entity_type)
-        VALUES (?, ?, ?);
+        INSERT INTO corpus.entity_lexicon (raw_name, canonical_name, entity_type)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (raw_name) DO NOTHING;
     """
-    con.execute(insert_query, [raw_name_clean, resolved_canonical, entity_type])
+    con.execute(insert_query, (raw_name_clean, resolved_canonical, entity_type))
     
     return resolved_canonical
 
@@ -119,7 +117,7 @@ def resolve_and_store_entities(uid, entities, con):
         canon = resolve_entity(raw_name, entity_type, con)
         if canon:
             insert_query = """
-                INSERT INTO entities (uid, entity_type, raw_name, canonical_name)
-                VALUES (?, ?, ?, ?);
+                INSERT INTO corpus.entities (uid, entity_type, raw_name, canonical_name)
+                VALUES (%s, %s, %s, %s);
             """
-            con.execute(insert_query, [uid, entity_type, raw_name, canon])
+            con.execute(insert_query, (uid, entity_type, raw_name, canon))

@@ -10,7 +10,7 @@ def get_config():
     config = {
         "gmail_username": "",
         "gmail_app_password": "",
-        "db_path": "/app/data/newsletters.db",
+        "db_path": os.getenv("DATABASE_URL", "postgresql://pushmedia:pushmedia@postgres:5432/pushmedia"),
         "llm_provider": "openrouter",
         "llm_model": "liquid/lfm-2-24b-a2b",
         "embedding_provider": "openrouter",

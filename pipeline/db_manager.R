@@ -1,26 +1,48 @@
-#' Connect to DuckDB Database
+#' Connect to PostgreSQL Database
 #'
-#' Establishes a connection to the local DuckDB file and sets performance and memory constraints.
+#' Establishes a connection to the Postgres database used by the web app and ingestion job.
 #'
-#' @param db_path Path to the DuckDB file.
+#' @param db_path Kept for backwards-compatible callers; DATABASE_URL is used when set.
 #' @return A DBI connection object.
 #' @importFrom DBI dbConnect
-#' @importFrom duckdb duckdb
+#' @importFrom RPostgres Postgres
 #' @export
+postgres_connect_url <- function(database_url) {
+    parsed <- httr2::url_parse(database_url)
+    if (!parsed$scheme %in% c("postgres", "postgresql") || is.null(parsed$hostname)) {
+        stop("DATABASE_URL must be a PostgreSQL URL.")
+    }
+
+    args <- list(
+        drv = RPostgres::Postgres(),
+        dbname = sub("^/", "", parsed$path),
+        host = parsed$hostname,
+        port = as.integer(parsed$port %||% "5432"),
+        user = parsed$username %||% "",
+        password = parsed$password %||% ""
+    )
+    if (!is.null(parsed$query$sslmode)) {
+        args$sslmode <- parsed$query$sslmode
+    }
+
+    do.call(DBI::dbConnect, args)
+}
+
+`%||%` <- function(value, fallback) {
+    if (is.null(value) || length(value) == 0 || identical(value, "")) fallback else value
+}
+
 get_db_connection <- function(db_path) {
-    # Ensure parent directory exists
-    dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
-    
-    # Establish connection with retry logic for DuckDB locks
+    database_url <- Sys.getenv("DATABASE_URL", unset = db_path)
     con <- NULL
     for (i in 1:60) {
         tryCatch({
-            con <- DBI::dbConnect(duckdb::duckdb(), db_path)
+            con <- postgres_connect_url(database_url)
             break
         }, error = function(e) {
-            if (grepl("lock", tolower(e$message))) {
-                if (i == 60) stop("Database locked for too long: ", e$message)
-                message("Database is locked (attempt ", i, "/60). Retrying in 1 second...")
+            if (grepl("connection|could not|timeout|refused|starting", tolower(e$message))) {
+                if (i == 60) stop("Database unavailable for too long: ", e$message)
+                message("Database unavailable (attempt ", i, "/60). Retrying in 1 second...")
                 Sys.sleep(1)
             } else {
                 stop("Database connection failed: ", e$message)
@@ -28,9 +50,7 @@ get_db_connection <- function(db_path) {
         })
     }
     
-    # Enforce memory and thread safety constraints for resource-constrained VMs
-    DBI::dbExecute(con, "SET max_memory = '1.5GB';")
-    DBI::dbExecute(con, "SET threads = 1;")
+    DBI::dbExecute(con, "SET search_path TO corpus, public;")
     
     return(con)
 }
@@ -42,6 +62,10 @@ get_db_connection <- function(db_path) {
 #' @param con A DBI database connection.
 #' @export
 init_db <- function(con) {
+    DBI::dbExecute(con, "CREATE EXTENSION IF NOT EXISTS vector;")
+    DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS corpus;")
+    DBI::dbExecute(con, "SET search_path TO corpus, public;")
+
     # 1. Create newsletters table
     DBI::dbExecute(con, "
         CREATE TABLE IF NOT EXISTS newsletters (
@@ -60,34 +84,23 @@ init_db <- function(con) {
             themes TEXT,
             keywords TEXT,
             subscription_marketing BOOLEAN,
-            english_embedding FLOAT[],
-            multilingual_embedding FLOAT[],
+            english_embedding vector,
+            multilingual_embedding vector,
+            flag_status TEXT DEFAULT NULL,
             raw_email TEXT,
             ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ")
     
-    # Schema migration check: Ensure 'url' and 'raw_email' columns exist in existing databases
-    cols <- DBI::dbGetQuery(con, "PRAGMA table_info('newsletters');")
-    if (!("url" %in% cols$name)) {
-        message("Migration: Adding 'url' column to existing newsletters table.")
-        DBI::dbExecute(con, "ALTER TABLE newsletters ADD COLUMN url VARCHAR;")
-    }
-    if (!("flag_status" %in% cols$name)) {
-        message("Migration: Adding 'flag_status' column to existing newsletters table.")
-        DBI::dbExecute(con, "ALTER TABLE newsletters ADD COLUMN flag_status VARCHAR DEFAULT NULL;")
-    }
-    if (!("raw_email" %in% cols$name)) {
-        message("Migration: Adding 'raw_email' column to existing newsletters table.")
-        DBI::dbExecute(con, "ALTER TABLE newsletters ADD COLUMN raw_email TEXT;")
-    }
+    DBI::dbExecute(con, "ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS url VARCHAR;")
+    DBI::dbExecute(con, "ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS flag_status TEXT DEFAULT NULL;")
+    DBI::dbExecute(con, "ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS raw_email TEXT;")
     
     # 2. Create entity ID sequence and entities table
-    DBI::dbExecute(con, "CREATE SEQUENCE IF NOT EXISTS entity_id_seq;")
     DBI::dbExecute(con, "
         CREATE TABLE IF NOT EXISTS entities (
-            entity_id INTEGER DEFAULT nextval('entity_id_seq') PRIMARY KEY,
-            uid VARCHAR,
+            entity_id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+            uid VARCHAR REFERENCES newsletters(uid) ON DELETE CASCADE,
             entity_type VARCHAR,
             raw_name VARCHAR,
             canonical_name VARCHAR
@@ -103,8 +116,13 @@ init_db <- function(con) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ")
+
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS newsletters_datetime_idx ON newsletters (datetime DESC);")
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS newsletters_content_type_idx ON newsletters (content_type);")
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS newsletters_language_idx ON newsletters (detected_language);")
+    DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS entities_uid_idx ON entities (uid);")
     
-    message("DuckDB tables initialized successfully.")
+    message("Postgres corpus tables initialized successfully.")
 }
 
 #' Close Database Connection
@@ -115,6 +133,6 @@ init_db <- function(con) {
 #' @export
 close_db_connection <- function(con) {
     if (!is.null(con)) {
-        DBI::dbDisconnect(con, shutdown = TRUE)
+        DBI::dbDisconnect(con)
     }
 }

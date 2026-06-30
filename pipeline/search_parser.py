@@ -21,7 +21,7 @@ class TermNode(Node):
             sql_term = f"%{sql_term}%"
         
         col = "summary" if space == "english" else "original_language_summary"
-        return f"((title ILIKE ?) OR ({col} ILIKE ?))"
+        return f"((title ILIKE %s) OR ({col} ILIKE %s))"
     
     def get_params(self, space="english"):
         sql_term = self.term.replace('*', '%').replace('?', '_')
@@ -37,7 +37,7 @@ class PhraseNode(Node):
         
     def to_sql(self, space="english"):
         col = "summary" if space == "english" else "original_language_summary"
-        return f"((title ILIKE ?) OR ({col} ILIKE ?))"
+        return f"((title ILIKE %s) OR ({col} ILIKE %s))"
 
     def get_params(self, space="english"):
         return [f"%{self.phrase}%", f"%{self.phrase}%"]
@@ -50,7 +50,7 @@ class NearNode(Node):
         
     def to_sql(self, space="english"):
         col = "summary" if space == "english" else "original_language_summary"
-        return f"REGEXP_MATCHES({col}, ?, 'i')"
+        return f"({col} ~* %s)"
         
     def get_params(self, space="english"):
         # word1(?:\W+\w+){0,distance}\W+word2 OR reversed

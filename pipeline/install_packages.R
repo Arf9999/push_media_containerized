@@ -6,10 +6,11 @@ options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/jammy/l
 required_packages <- c(
   "jsonlite",
   "DBI",
-  "duckdb",
+  "RPostgres",
   "digest",
   "dplyr",
   "httr",
+  "httr2",
   "rvest",
   "xml2",
   "stringdist",

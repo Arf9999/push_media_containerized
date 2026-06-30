@@ -74,7 +74,7 @@ evaluate_translation <- function(orig_text, english_text, config) {
 
 #' Run Nuance Benchmarking Against Database Records
 #'
-#' Queries DuckDB for articles that required translation, runs evaluation on them,
+#' Queries Postgres for articles that required translation, runs evaluation on them,
 #' and outputs a summary quality metric report.
 #'
 #' @param sample_size Max number of records to evaluate.
@@ -95,7 +95,7 @@ run_nuance_benchmark <- function(sample_size = 10, config = NULL) {
         SELECT uid, title, detected_language, original_language_summary, summary
         FROM newsletters
         WHERE detected_language != 'en' AND original_language_summary IS NOT NULL AND summary IS NOT NULL
-        LIMIT ?;
+        LIMIT $1;
     "
     records <- DBI::dbGetQuery(con, query, params = list(as.integer(sample_size)))
     

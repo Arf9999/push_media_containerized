@@ -12,8 +12,8 @@ COPY . .
 # Expose FastAPI's default port
 EXPOSE 8080
 
-# Configure environment variables to use the shared database volume
-ENV SURVEY_DB_PATH=/app/data/sources.db
+# Configure environment variables to use Postgres
+ENV DATABASE_URL=postgresql://pushmedia:pushmedia@postgres:5432/pushmedia
 ENV SURVEY_LOG_DIR=/app/data/logs
 
 # Run the FastAPI server

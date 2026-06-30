@@ -9,8 +9,9 @@ get_config <- function() {
     gmail_username <- Sys.getenv("GMAIL_USERNAME", unset = "")
     gmail_app_password <- Sys.getenv("GMAIL_APP_PASSWORD", unset = "")
     
-    # DB configuration
-    db_path <- Sys.getenv("DUCKDB_PATH", unset = "/app/data/newsletters.db")
+    # DB configuration. Kept as db_path for existing callers; it now carries a
+    # Postgres connection string locally and can point at RDS later.
+    db_path <- Sys.getenv("DATABASE_URL", unset = "postgresql://pushmedia:pushmedia@postgres:5432/pushmedia")
     
     # Helper to traverse manifest JSON safely
     get_manifest_val <- function(manifest, path, default) {
@@ -88,4 +89,3 @@ get_config <- function() {
     
     return(config)
 }
-
