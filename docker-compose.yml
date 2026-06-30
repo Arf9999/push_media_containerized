@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   pipeline:
     platform: linux/amd64
