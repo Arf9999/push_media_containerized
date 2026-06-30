@@ -39,6 +39,10 @@ extension.
 
 ## Reviewer Validation
 
+The reviewer only needs Docker Desktop. PostgreSQL, pgvector, Python, and R are
+provided by the containers; no local database setup or SQL initialization is
+required.
+
 Build and start the complete local stack, including one ingestion run:
 
 ```bash

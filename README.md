@@ -21,6 +21,13 @@ The web services still mount `./data` for non-database runtime files such as log
 
 ## Getting Started
 
+### Prerequisite
+
+Install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+No separate PostgreSQL, Python, or R installation is required. Docker Compose
+downloads PostgreSQL with pgvector, creates the database and persistent volume,
+waits for PostgreSQL to become healthy, and then starts the applications.
+
 ### 1. Configuration
 
 1. For ingestion, provide model and source credentials as environment variables
@@ -45,6 +52,9 @@ docker compose --profile jobs up --build -d
 
 The `pipeline-job` container exits after the ingestion run; Postgres and both web
 services remain running.
+
+The first run can take several minutes while Docker downloads images and installs
+the R dependencies. Later runs reuse the built images and database volume.
 
 - **Dashboard UI**: `http://localhost:8080/`
 - **Survey Tool UI**: `http://localhost:8081/`
