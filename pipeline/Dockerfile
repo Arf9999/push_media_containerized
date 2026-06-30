@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libxml2-dev \
     libcurl4-openssl-dev \
+    libpq5 \
+    libpq-dev \
     git \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -30,9 +32,6 @@ COPY . .
 EXPOSE 8080
 
 # Environment variables defaults
-ENV DUCKDB_PATH=/app/data/newsletters.db
-ENV USERS_DB_PATH=/app/data/users.db
-ENV SOURCES_DB_PATH=/app/data/sources.db
 ENV LAST_EMAIL_ID_FILE=/app/data/last_email_id.txt
 ENV FORENSIC_LOG_PATH=/app/data/FORENSIC_LOG
 

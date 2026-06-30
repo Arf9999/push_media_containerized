@@ -1,7 +1,7 @@
 #' Entity Lexicon and Deduplication Resolver
 #'
 #' Deduplicates extracted entities (people, organizations, acronyms) against
-#' the DuckDB `entity_lexicon` table using Jaro-Winkler string similarity.
+#' the Postgres `entity_lexicon` table using Jaro-Winkler string similarity.
 #'
 #' @importFrom DBI dbGetQuery dbExecute
 #' @importFrom stringr str_to_lower str_trim
@@ -53,7 +53,7 @@ resolve_entity <- function(raw_name, entity_type, con, threshold = 0.88) {
     if (raw_name_clean == "") return(NA_character_)
     
     # 1. Check exact match in lexicon (case-insensitive)
-    query <- "SELECT canonical_name FROM entity_lexicon WHERE LOWER(raw_name) = LOWER(?);"
+    query <- "SELECT canonical_name FROM entity_lexicon WHERE LOWER(raw_name) = LOWER($1);"
     res <- DBI::dbGetQuery(con, query, params = list(raw_name_clean))
     
     if (nrow(res) > 0) {
@@ -61,7 +61,7 @@ resolve_entity <- function(raw_name, entity_type, con, threshold = 0.88) {
     }
     
     # 2. Fetch all canonical names for the same entity type
-    lexicon_query <- "SELECT DISTINCT canonical_name FROM entity_lexicon WHERE entity_type = ?;"
+    lexicon_query <- "SELECT DISTINCT canonical_name FROM entity_lexicon WHERE entity_type = $1;"
     existing_canonicals <- DBI::dbGetQuery(con, lexicon_query, params = list(entity_type))$canonical_name
     
     best_similarity <- 0
@@ -85,8 +85,9 @@ resolve_entity <- function(raw_name, entity_type, con, threshold = 0.88) {
     
     # 4. Insert mapping into the lexicon
     insert_query <- "
-        INSERT OR IGNORE INTO entity_lexicon (raw_name, canonical_name, entity_type)
-        VALUES (?, ?, ?);
+        INSERT INTO entity_lexicon (raw_name, canonical_name, entity_type)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (raw_name) DO NOTHING;
     "
     DBI::dbExecute(con, insert_query, params = list(raw_name_clean, resolved_canonical, entity_type))
     
@@ -115,7 +116,7 @@ resolve_and_store_entities <- function(uid, entities_df, con) {
         
         insert_query <- "
             INSERT INTO entities (uid, entity_type, raw_name, canonical_name)
-            VALUES (?, ?, ?, ?);
+            VALUES ($1, $2, $3, $4);
         "
         DBI::dbExecute(con, insert_query, params = list(uid, type, raw, canon))
     }

@@ -1,5 +1,10 @@
 # Data Digest & Database Bible: Push Media Pipeline
 
+> **Legacy schema reference:** The field descriptions remain useful, but the
+> physical databases documented below have been replaced by PostgreSQL schemas
+> `corpus`, `dashboard`, and `survey`. Embeddings now use pgvector's `vector`
+> type. See `../POSTGRES_MIGRATION.md`.
+
 This document serves as the comprehensive schema registry and field dictionary for all databases in the Phase 2 Push Media Pipeline.
 
 ---

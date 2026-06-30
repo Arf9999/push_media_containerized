@@ -1,11 +1,13 @@
 import os
-import sqlite3
 import datetime
 import re
 import csv
 import io
 import logging
 import hashlib
+import psycopg
+from urllib.parse import urlsplit
+from psycopg.rows import dict_row
 from fastapi import FastAPI, HTTPException, Query, Header, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, FileResponse
@@ -14,13 +16,15 @@ from pydantic import BaseModel, Field
 # Base Directory Paths and Configurable Storage Paths for GCP/GCS Deployment Portability
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Enable custom database and log paths via environment variables (e.g. for GCS Volume Mounts)
-DB_PATH = os.environ.get("SURVEY_DB_PATH", os.path.join(BASE_DIR, "sources.db"))
+# PostgreSQL connection. In Docker this points at the local postgres service; in AWS
+# it can point at RDS without code changes.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required.")
 LOG_DIR = os.environ.get("SURVEY_LOG_DIR", os.path.join(BASE_DIR, "logs"))
 LOG_PATH = os.path.join(LOG_DIR, "survey_activity.log")
 
 # Ensure target directories exist
-os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Configure Activity Logging
@@ -40,8 +44,16 @@ stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
+database_target = urlsplit(DATABASE_URL)
+logger.info(
+    "Database target: %s:%s/%s",
+    database_target.hostname,
+    database_target.port or 5432,
+    database_target.path.lstrip("/"),
+)
+
 # Admin Security Config
-ADMIN_PASSCODE = "admin123"
+ADMIN_PASSCODE = os.environ.get("SURVEY_ADMIN_PASSCODE", "admin123")
 
 def verify_admin_token(x_admin_token: str = Header(None)):
     """Dependency to enforce passcode-based admin authentication."""
@@ -56,14 +68,20 @@ def verify_admin_token(x_admin_token: str = Header(None)):
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
+def get_db_conn(rows=None):
+    if rows is None:
+        return psycopg.connect(DATABASE_URL)
+    return psycopg.connect(DATABASE_URL, row_factory=rows)
+
 # Initialize Database Schema with migration handling
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
+    cursor.execute("CREATE SCHEMA IF NOT EXISTS survey")
     
     # Sources Table
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sources (
+        CREATE TABLE IF NOT EXISTS survey.sources (
             source_id TEXT PRIMARY KEY,
             source_name TEXT NOT NULL,
             platform TEXT NOT NULL,
@@ -73,25 +91,25 @@ def init_db():
             geographic_focus TEXT,
             publisher_type TEXT,
             input_by TEXT DEFAULT 'unknown',
-            date_added TEXT NOT NULL,
-            gating_passed INTEGER DEFAULT 0,
-            activity_passed INTEGER DEFAULT 0,
-            telegram_passed INTEGER DEFAULT 0,
-            is_verified INTEGER DEFAULT 0,
-            is_deleted INTEGER DEFAULT 0
+            date_added DATE NOT NULL,
+            gating_passed BOOLEAN DEFAULT FALSE,
+            activity_passed BOOLEAN DEFAULT FALSE,
+            telegram_passed BOOLEAN DEFAULT FALSE,
+            is_verified BOOLEAN DEFAULT FALSE,
+            is_deleted BOOLEAN DEFAULT FALSE
         )
     """)
     
     # Users Table for credentials verification
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS survey.users (
             username TEXT PRIMARY KEY,
             password TEXT NOT NULL
         )
     """)
     
     # Seed default user accounts if table is empty
-    cursor.execute("SELECT COUNT(*) FROM users")
+    cursor.execute("SELECT COUNT(*) FROM survey.users")
     if cursor.fetchone()[0] == 0:
         defaults = [
             ("ra_amina", hash_password("amina2026")),
@@ -99,19 +117,15 @@ def init_db():
             ("ra_coordinator", hash_password("coord2026")),
             ("andrew", hash_password("1234"))
         ]
-        cursor.executemany("INSERT INTO users (username, password) VALUES (?, ?)", defaults)
+        cursor.executemany("INSERT INTO survey.users (username, password) VALUES (%s, %s)", defaults)
         logger.info("Database: Seeded default allocated accounts: ra_amina, ra_bob, ra_coordinator, andrew.")
     
     # Handle DB Schema Migrations for existing deployments
-    cursor.execute("PRAGMA table_info(sources)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if "input_by" not in columns:
-        cursor.execute("ALTER TABLE sources ADD COLUMN input_by TEXT DEFAULT 'unknown'")
-        logger.info("Database Migration: added 'input_by' column to sources table.")
+    cursor.execute("ALTER TABLE survey.sources ADD COLUMN IF NOT EXISTS input_by TEXT DEFAULT 'unknown'")
         
     conn.commit()
     conn.close()
-    logger.info("SQLite sources database initialized successfully.")
+    logger.info("Postgres survey schema initialized successfully.")
 
 init_db()
 
@@ -121,6 +135,17 @@ app = FastAPI(
     description="Backend API for mapping public Telegram channels, Substack newsletters, and RSS feeds.",
     version="1.3.0"
 )
+
+@app.get("/health")
+def health():
+    try:
+        with get_db_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        return {"status": "ok", "database": "connected"}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
 
 # Pydantic Schemas for Requests
 class SourceCreate(BaseModel):
@@ -160,10 +185,10 @@ def generate_source_id(country_iso: str, platform: str, topic_code: str) -> str:
         
     prefix = f"{country}_{plat}_{topic}_"
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT source_id FROM sources WHERE source_id LIKE ?", 
+        "SELECT source_id FROM survey.sources WHERE source_id LIKE %s",
         (f"{prefix}%",)
     )
     rows = cursor.fetchall()
@@ -192,9 +217,9 @@ def login_user(auth: UserAuth):
     username_clean = auth.username.strip().lower()
     hashed = hash_password(auth.password)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE username = ? AND password = ?", (username_clean, hashed))
+    cursor.execute("SELECT username FROM survey.users WHERE username = %s AND password = %s", (username_clean, hashed))
     user = cursor.fetchone()
     conn.close()
     
@@ -212,9 +237,9 @@ def get_allocated_users(x_admin_token: str = Header(None)):
     """Fetch all allocated user accounts. Restricted to Admin."""
     verify_admin_token(x_admin_token)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users ORDER BY username ASC")
+    cursor.execute("SELECT username FROM survey.users ORDER BY username ASC")
     users = [row[0] for row in cursor.fetchall()]
     conn.close()
     return users
@@ -225,16 +250,16 @@ def allocate_user(auth: UserAuth, x_admin_token: str = Header(None)):
     verify_admin_token(x_admin_token)
     username_clean = auth.username.strip().lower()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE username = ?", (username_clean,))
+    cursor.execute("SELECT username FROM survey.users WHERE username = %s", (username_clean,))
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="Username is already allocated.")
         
     hashed = hash_password(auth.password)
     try:
-        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username_clean, hashed))
+        cursor.execute("INSERT INTO survey.users (username, password) VALUES (%s, %s)", (username_clean, hashed))
         conn.commit()
         logger.info(f"Action: Admin allocated new auditor: '{username_clean}'")
     except Exception as e:
@@ -252,14 +277,14 @@ def revoke_user(username: str, x_admin_token: str = Header(None)):
     verify_admin_token(x_admin_token)
     username_clean = username.strip().lower()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE username = ?", (username_clean,))
+    cursor.execute("SELECT username FROM survey.users WHERE username = %s", (username_clean,))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="User account not found.")
         
-    cursor.execute("DELETE FROM users WHERE username = ?", (username_clean,))
+    cursor.execute("DELETE FROM survey.users WHERE username = %s", (username_clean,))
     conn.commit()
     conn.close()
     
@@ -279,18 +304,17 @@ def verify_admin(payload: dict):
 @app.get("/api/sources")
 def get_sources(include_deleted: bool = Query(False), input_by: str = Query(None)):
     """Fetch all logged sources. Optionally filtered by auditor username."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_conn(dict_row)
     cursor = conn.cursor()
     
-    query = "SELECT * FROM sources WHERE 1=1"
+    query = "SELECT * FROM survey.sources WHERE 1=1"
     params = []
     
     if not include_deleted:
-        query += " AND is_deleted = 0"
+        query += " AND is_deleted = FALSE"
         
     if input_by:
-        query += " AND input_by = ?"
+        query += " AND input_by = %s"
         params.append(input_by.strip().lower())
         
     query += " ORDER BY date_added DESC, source_id DESC"
@@ -312,11 +336,11 @@ def create_source(source: SourceCreate):
             logger.warning(f"Rejection: Private Telegram link blocked: '{url}'")
             raise HTTPException(status_code=400, detail="Private Telegram invite links are prohibited. Access must be public.")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
     
     # Perform strict duplicate check on active records
-    cursor.execute("SELECT source_id, source_name FROM sources WHERE ingest_url = ? AND is_deleted = 0", (source.ingest_url.strip(),))
+    cursor.execute("SELECT source_id, source_name FROM survey.sources WHERE ingest_url = %s AND is_deleted = FALSE", (source.ingest_url.strip(),))
     existing = cursor.fetchone()
     if existing:
         conn.close()
@@ -332,11 +356,11 @@ def create_source(source: SourceCreate):
     
     try:
         cursor.execute("""
-            INSERT INTO sources (
+            INSERT INTO survey.sources (
                 source_id, source_name, platform, ingest_url, primary_language,
                 languages_spoken, geographic_focus, publisher_type, input_by, date_added,
                 gating_passed, activity_passed, telegram_passed, is_verified, is_deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE, FALSE)
         """, (
             source_id,
             source.source_name.strip(),
@@ -348,13 +372,13 @@ def create_source(source: SourceCreate):
             source.publisher_type,
             source.input_by.strip(),
             date_added,
-            1 if source.gating_passed else 0,
-            1 if source.activity_passed else 0,
-            1 if source.telegram_passed else 0
+            source.gating_passed,
+            source.activity_passed,
+            source.telegram_passed
         ))
         conn.commit()
         logger.info(f"Action: Source created. ID: {source_id} | Name: {source.source_name} | By: {source.input_by} | URL: {source.ingest_url}")
-    except sqlite3.IntegrityError as e:
+    except psycopg.IntegrityError as e:
         conn.close()
         logger.error(f"Error: Database integrity violation on insert: {e}")
         raise HTTPException(status_code=400, detail="Database write conflict. Please retry.")
@@ -366,20 +390,20 @@ def create_source(source: SourceCreate):
 @app.get("/api/check_duplicate")
 def check_duplicate(url: str = None, name: str = None):
     """Direct helper for debounced UI inputs to prevent duplicates before submission."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
     
     url_match = None
     name_match = None
     
     if url:
-        cursor.execute("SELECT source_id, source_name, ingest_url FROM sources WHERE ingest_url = ? AND is_deleted = 0", (url.strip(),))
+        cursor.execute("SELECT source_id, source_name, ingest_url FROM survey.sources WHERE ingest_url = %s AND is_deleted = FALSE", (url.strip(),))
         row = cursor.fetchone()
         if row:
             url_match = {"source_id": row[0], "source_name": row[1], "ingest_url": row[2]}
             
     if name:
-        cursor.execute("SELECT source_id, source_name, ingest_url FROM sources WHERE source_name = ? AND is_deleted = 0", (name.strip(),))
+        cursor.execute("SELECT source_id, source_name, ingest_url FROM survey.sources WHERE source_name = %s AND is_deleted = FALSE", (name.strip(),))
         row = cursor.fetchone()
         if row:
             name_match = {"source_id": row[0], "source_name": row[1], "ingest_url": row[2]}
@@ -399,15 +423,15 @@ def delete_source(source_id: str, x_admin_token: str = Header(None)):
     """Soft-delete a source to allow undeletion failsafes. Restricted to Admin."""
     verify_admin_token(x_admin_token)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT source_id, ingest_url FROM sources WHERE source_id = ?", (source_id,))
+    cursor.execute("SELECT source_id, ingest_url FROM survey.sources WHERE source_id = %s", (source_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Source not found.")
         
-    cursor.execute("UPDATE sources SET is_deleted = 1 WHERE source_id = ?", (source_id,))
+    cursor.execute("UPDATE survey.sources SET is_deleted = TRUE WHERE source_id = %s", (source_id,))
     conn.commit()
     conn.close()
     
@@ -419,15 +443,15 @@ def restore_source(source_id: str, x_admin_token: str = Header(None)):
     """Restore a previously soft-deleted source. Restricted to Admin."""
     verify_admin_token(x_admin_token)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT source_id, ingest_url FROM sources WHERE source_id = ?", (source_id,))
+    cursor.execute("SELECT source_id, ingest_url FROM survey.sources WHERE source_id = %s", (source_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Source not found.")
         
-    cursor.execute("UPDATE sources SET is_deleted = 0 WHERE source_id = ?", (source_id,))
+    cursor.execute("UPDATE survey.sources SET is_deleted = FALSE WHERE source_id = %s", (source_id,))
     conn.commit()
     conn.close()
     
@@ -439,15 +463,14 @@ def verify_source(source_id: str, verify: bool = Query(True), x_admin_token: str
     """Mark a source as reviewed and verified. Restricted to Admin."""
     verify_admin_token(x_admin_token)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT source_id FROM sources WHERE source_id = ?", (source_id,))
+    cursor.execute("SELECT source_id FROM survey.sources WHERE source_id = %s", (source_id,))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Source not found.")
         
-    val = 1 if verify else 0
-    cursor.execute("UPDATE sources SET is_verified = ? WHERE source_id = ?", (val, source_id))
+    cursor.execute("UPDATE survey.sources SET is_verified = %s WHERE source_id = %s", (verify, source_id))
     conn.commit()
     conn.close()
     
@@ -457,29 +480,29 @@ def verify_source(source_id: str, verify: bool = Query(True), x_admin_token: str
 @app.get("/api/stats")
 def get_stats(input_by: str = Query(None)):
     """Retrieve aggregate insights for frontend charts and counters. Optionally filtered by auditor."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_conn()
     cursor = conn.cursor()
     
     user_filter = ""
     params = []
     if input_by:
-        user_filter = " AND input_by = ?"
+        user_filter = " AND input_by = %s"
         params.append(input_by.strip().lower())
         
     # Active total
-    cursor.execute(f"SELECT COUNT(*) FROM sources WHERE is_deleted = 0{user_filter}", params)
+    cursor.execute(f"SELECT COUNT(*) FROM survey.sources WHERE is_deleted = FALSE{user_filter}", params)
     total_active = cursor.fetchone()[0]
     
     # Platform counts
-    cursor.execute(f"SELECT platform, COUNT(*) FROM sources WHERE is_deleted = 0{user_filter} GROUP BY platform", params)
+    cursor.execute(f"SELECT platform, COUNT(*) FROM survey.sources WHERE is_deleted = FALSE{user_filter} GROUP BY platform", params)
     platform_counts = dict(cursor.fetchall())
     
     # Publisher type counts
-    cursor.execute(f"SELECT publisher_type, COUNT(*) FROM sources WHERE is_deleted = 0{user_filter} GROUP BY publisher_type", params)
+    cursor.execute(f"SELECT publisher_type, COUNT(*) FROM survey.sources WHERE is_deleted = FALSE{user_filter} GROUP BY publisher_type", params)
     pub_counts = dict(cursor.fetchall())
     
     # Country counts extracted from source_id
-    cursor.execute(f"SELECT source_id FROM sources WHERE is_deleted = 0{user_filter}", params)
+    cursor.execute(f"SELECT source_id FROM survey.sources WHERE is_deleted = FALSE{user_filter}", params)
     sids = cursor.fetchall()
     country_counts = {}
     for (sid,) in sids:
@@ -489,15 +512,15 @@ def get_stats(input_by: str = Query(None)):
             country_counts[country] = country_counts.get(country, 0) + 1
             
     # Language counts
-    cursor.execute(f"SELECT primary_language, COUNT(*) FROM sources WHERE is_deleted = 0{user_filter} GROUP BY primary_language", params)
+    cursor.execute(f"SELECT primary_language, COUNT(*) FROM survey.sources WHERE is_deleted = FALSE{user_filter} GROUP BY primary_language", params)
     lang_counts = dict(cursor.fetchall())
     
     # Total verified
-    cursor.execute(f"SELECT COUNT(*) FROM sources WHERE is_deleted = 0 AND is_verified = 1{user_filter}", params)
+    cursor.execute(f"SELECT COUNT(*) FROM survey.sources WHERE is_deleted = FALSE AND is_verified = TRUE{user_filter}", params)
     total_verified = cursor.fetchone()[0]
     
     # Total soft-deleted
-    cursor.execute(f"SELECT COUNT(*) FROM sources WHERE is_deleted = 1{user_filter}", params)
+    cursor.execute(f"SELECT COUNT(*) FROM survey.sources WHERE is_deleted = TRUE{user_filter}", params)
     total_deleted = cursor.fetchone()[0]
     
     conn.close()
@@ -527,14 +550,13 @@ def export_csv(admin_token: str = Query(None), input_by: str = Query(None)):
             detail="Invalid or missing Admin passcode."
         )
         
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_conn(dict_row)
     cursor = conn.cursor()
     
-    query = "SELECT * FROM sources WHERE 1=1"
+    query = "SELECT * FROM survey.sources WHERE 1=1"
     params = []
     if input_by:
-        query += " AND input_by = ?"
+        query += " AND input_by = %s"
         params.append(input_by.strip().lower())
     query += " ORDER BY date_added DESC, source_id DESC"
     

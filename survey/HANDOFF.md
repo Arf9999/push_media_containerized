@@ -1,5 +1,9 @@
 # Regional Media Ingestion Survey Application - Handoff Documentation
 
+> **Legacy deployment reference:** The survey now stores sources and users in
+> the PostgreSQL `survey` schema through `DATABASE_URL`. The SQLite and Cloud
+> Storage database instructions below describe the former deployment.
+
 Welcome to the **Regional Media Ingestion Survey Application** workspace (located under [alpha_survey/](file:///Users/arf/R_projects_local/newsletter_phase2/alpha_survey)). This document outlines the architecture, database schema, configuration, and execution guidelines for deploying and running the survey application.
 
 ---

@@ -1,26 +1,82 @@
+x-app-database: &app-database
+  DATABASE_URL: ${DATABASE_URL:-postgresql://pushmedia:pushmedia@postgres:5432/pushmedia}
+
+x-pipeline-runtime: &pipeline-runtime
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GMAIL_USERNAME: ${GMAIL_USERNAME:-}
+  GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+  LLM_PROVIDER: ${LLM_PROVIDER:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+  TRANSLATION_MODEL: ${TRANSLATION_MODEL:-}
+  VISION_MODEL: ${VISION_MODEL:-}
+  OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: beta_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pushmedia
+      POSTGRES_PASSWORD: pushmedia
+      POSTGRES_DB: pushmedia
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pushmedia -d pushmedia"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   pipeline:
     platform: linux/amd64
+    image: push-media-pipeline:local
     build:
       context: ./pipeline
       dockerfile: Dockerfile
     container_name: beta_pipeline_web
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
       - ./data:/app/data
-      - ./pipeline/credentials.json:/app/credentials.json:ro
     environment:
-      - DUCKDB_PATH=/app/data/newsletters.db
-      - USERS_DB_PATH=/app/data/users.db
-      - SOURCES_DB_PATH=/app/data/sources.db
-      - LAST_EMAIL_ID_FILE=/app/data/last_email_id.txt
-      - FORENSIC_LOG_PATH=/app/data/FORENSIC_LOG
-      - OLLAMA_HOST=http://host.docker.internal:11434
+      <<: [*app-database, *pipeline-runtime]
+      LAST_EMAIL_ID_FILE: /app/data/last_email_id.txt
+      FORENSIC_LOG_PATH: /app/data/FORENSIC_LOG
+      # Add other config overrides here if needed (e.g. LLM_PROVIDER, OPENROUTER_API_KEY)
     extra_hosts:
       - "host.docker.internal:host-gateway"
-      # Add other config overrides here if needed (e.g. LLM_PROVIDER, OPENROUTER_API_KEY)
+
+  pipeline-job:
+    profiles: ["jobs"]
+    platform: linux/amd64
+    image: push-media-pipeline:local
+    build:
+      context: ./pipeline
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["Rscript", "run_cron.R"]
+    restart: "no"
+    volumes:
+      - ./data:/app/data
+    environment:
+      <<: [*app-database, *pipeline-runtime]
+      LAST_EMAIL_ID_FILE: /app/data/last_email_id.txt
+      FORENSIC_LOG_PATH: /app/data/FORENSIC_LOG
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   survey:
     platform: linux/amd64
@@ -29,10 +85,17 @@ services:
       dockerfile: Dockerfile
     container_name: beta_survey_web
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8081:8080"
     volumes:
       - ./data:/app/data
     environment:
-      - SURVEY_DB_PATH=/app/data/sources.db
-      - SURVEY_LOG_DIR=/app/data/logs
+      <<: *app-database
+      SURVEY_LOG_DIR: /app/data/logs
+      SURVEY_ADMIN_PASSCODE: admin123
+
+volumes:
+  postgres_data:

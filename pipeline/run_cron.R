@@ -10,6 +10,7 @@ if (!file.exists("pipeline_runner.R")) {
 
 library(jsonlite)
 library(DBI)
+library(RPostgres)
 
 # 1. Load credentials into environment
 if (file.exists("credentials.json")) {
@@ -30,16 +31,17 @@ if (file.exists("credentials.json")) {
 source("pipeline_runner.R")
 
 # 3. Load Dynamic Sources
-message("[Cron] Loading dynamic sources from /app/data/sources.db...")
-db_path <- Sys.getenv("SOURCES_DB_PATH", "/app/data/sources.db")
+message("[Cron] Loading dynamic sources from Postgres survey.sources...")
+database_url <- require_database_url()
+message("[Cron] Database target: ", database_target_label(database_url))
 con <- tryCatch({
-    DBI::dbConnect(RSQLite::SQLite(), db_path)
+    postgres_connect_url(database_url)
 }, error = function(e) {
-    stop("Failed to connect to SQLite sources database: ", e$message)
+    stop("Failed to connect to Postgres sources database: ", e$message)
 })
 
 sources <- tryCatch({
-    DBI::dbGetQuery(con, "SELECT platform, source_name, ingest_url FROM sources WHERE is_deleted = 0")
+    DBI::dbGetQuery(con, "SELECT platform, source_name, ingest_url FROM survey.sources WHERE is_deleted = FALSE")
 }, error = function(e) {
     stop("Failed to query sources database: ", e$message)
 })

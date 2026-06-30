@@ -2,7 +2,7 @@
 #
 # Coordinates modular ingestion sources (Gmail, RSS, Telegram, Substack),
 # runs LLM-based translation and entity extraction, computes dual-space vector
-# embeddings, runs entity lexicon deduplication, and commits to local DuckDB.
+# embeddings, runs entity lexicon deduplication, and commits to Postgres.
 
 # Load modules
 source("config.R")
@@ -19,22 +19,21 @@ source("entity_resolver.R")
 
 library(jsonlite)
 library(DBI)
-library(duckdb)
+library(RPostgres)
 # Load low‑resource language list
 low_res_langs <- fromJSON("low_resource_languages.json")
 library(digest)
 library(dplyr)
 
-#' Clean and format a R vector to DuckDB FLOAT[] list representation
+#' Clean and format an R vector to pgvector literal representation
 #'
 #' @param vec Numeric vector of embeddings.
-#' @return SQL string format e.g. '[0.1, 0.2, ...]'
-format_vector_for_duckdb <- function(vec) {
+#' @return SQL string format e.g. '[0.1,0.2,...]'
+format_vector_for_postgres <- function(vec) {
     if (is.null(vec) || length(vec) == 0 || any(is.na(vec))) {
         return(NULL)
     }
-    # Create literal array: array[0.1, 0.2, ...]
-    paste0("ARRAY[", paste(vec, collapse = ", "), "]")
+    paste0("[", paste(as.numeric(vec), collapse = ","), "]")
 }
 
 #' Run Ingestion and Process New Articles
@@ -404,8 +403,11 @@ run_pipeline <- function(rss_feeds = list(), telegram_channels = c(), subscripti
                     topics, themes, keywords, subscription_marketing,
                     english_embedding, multilingual_embedding, raw_email
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                );
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                    $10, $11, $12, $13, $14, $15,
+                    CAST($16 AS vector), CAST($17 AS vector), $18
+                )
+                ON CONFLICT (uid) DO NOTHING;
             "
             # Ensure all bound parameters are of length 1 to avoid rapi_bind mismatch errors
             safe_param <- function(val, default = NA_character_) {
@@ -434,8 +436,8 @@ run_pipeline <- function(rss_feeds = list(), telegram_channels = c(), subscripti
                 safe_param(rec$themes),
                 safe_param(rec$keywords),
                 safe_bool(rec$subscription_marketing),
-                list(rec$english_embedding), # List columns
-                list(rec$multilingual_embedding),
+                format_vector_for_postgres(rec$english_embedding),
+                format_vector_for_postgres(rec$multilingual_embedding),
                 safe_param(rec$raw_email)
             ))
             
@@ -466,4 +468,3 @@ run_pipeline <- function(rss_feeds = list(), telegram_channels = c(), subscripti
     
     message("\n--- Pipeline Run Complete ---")
 }
-

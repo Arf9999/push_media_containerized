@@ -1,10 +1,10 @@
 #' Local Ollama Translation Module
 #'
 #' Provides translation from low-resource African languages to English using local Ollama models.
-#' Uses SQLite cache db to prevent duplicate calls and logs raw output to scratch logs.
+#' Uses a Postgres cache table to prevent duplicate calls and logs raw output to scratch logs.
 #'
 #' @importFrom DBI dbConnect dbExecute dbDisconnect dbGetQuery
-#' @importFrom RSQLite SQLite
+#' @importFrom RPostgres Postgres
 #' @importFrom digest digest
 #' @importFrom httr2 request req_body_json req_timeout req_retry req_perform resp_body_json
 #' @export
@@ -17,19 +17,19 @@
 #' @return Translated English text string.
 #' @export
 translate_ollama <- function(text, lang, model_name = "mzansilm") {
+  # Compute cache key
   key <- digest::digest(list(text = text, lang = lang, model = model_name), algo = "sha256")
-  cache_dir <- ifelse(dir.exists("data"), "data", "alpha")
-  if (!dir.exists(cache_dir)) {
-    dir.create(cache_dir, recursive = TRUE)
-  }
-  cache_db <- file.path(cache_dir, 'ollama_cache.db')
-  if (!file.exists(cache_db)) {
-    con_create <- DBI::dbConnect(RSQLite::SQLite(), cache_db)
-    DBI::dbExecute(con_create, 'CREATE TABLE cache (key TEXT PRIMARY KEY, translation TEXT)')
-    DBI::dbDisconnect(con_create)
-  }
-  con <- DBI::dbConnect(RSQLite::SQLite(), cache_db)
-  res <- DBI::dbGetQuery(con, sprintf("SELECT translation FROM cache WHERE key='%s'", key))
+  database_url <- require_database_url()
+  con <- postgres_connect_url(database_url)
+  DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS corpus;")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS corpus.translation_cache (
+      key TEXT PRIMARY KEY,
+      translation TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  ")
+  res <- DBI::dbGetQuery(con, "SELECT translation FROM corpus.translation_cache WHERE key = $1", params = list(key))
   if (nrow(res) > 0) {
     DBI::dbDisconnect(con)
     return(res$translation[1])
@@ -122,7 +122,11 @@ translate_ollama <- function(text, lang, model_name = "mzansilm") {
     })
   }
   # Store in cache
-  DBI::dbExecute(con, "INSERT INTO cache (key, translation) VALUES (?, ?)", params = list(key, translation))
+  DBI::dbExecute(
+    con,
+    "INSERT INTO corpus.translation_cache (key, translation) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET translation = EXCLUDED.translation",
+    params = list(key, translation)
+  )
   DBI::dbDisconnect(con)
   return(translation)
 }
@@ -174,5 +178,3 @@ translate_generic <- function(text, lang, config = NULL) {
   
   return(translation)
 }
-
-

@@ -1,5 +1,9 @@
 # Architectural Design & Structural Rationale
 
+> **Legacy architecture reference:** Database-specific sections below explain
+> the former DuckDB/SQLite design. The current implementation uses PostgreSQL
+> and pgvector; see `../POSTGRES_MIGRATION.md` for current behavior.
+
 This document explains the **strategic reasoning, trade-offs, and design decisions** that dictate the structure of the Phase 2 Push Media Pipeline. It focuses on *why* the pipeline is built this way, rather than *how* the technology works.
 
 ---

@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import time
 import datetime
 import json
-import duckdb
+import psycopg
 import re
 import traceback
 
@@ -12,6 +12,13 @@ from alpha.model_adapter import get_config, generate_completion, generate_embedd
 from alpha.email_ingester import get_gmail_client, fetch_email_metadata_and_text, close_gmail_client
 from alpha.entity_resolver import resolve_and_store_entities
 from alpha.prompts import get_analysis_system_prompt, construct_analysis_user_prompt
+
+def vector_literal(vec):
+    return "[" + ",".join(str(float(x)) for x in vec) + "]"
+
+def connect_db(config):
+    database_url = config.get("db_path") or os.getenv("DATABASE_URL")
+    return psycopg.connect(database_url)
 
 def process_uid(uid, rec, config, con_db):
     try:
@@ -58,17 +65,18 @@ def process_uid(uid, rec, config, con_db):
         pub_pub = analysis.get("publisher_metadata", {}).get("publisher") or rec["source"]
         platform = rec.get("platform", "email")
         
-        # Write to DuckDB
+        # Write to Postgres
         con_db.execute("""
-            INSERT INTO newsletters (
+            INSERT INTO corpus.newsletters (
                 uid, datetime, source, sender, title, url, summary,
                 original_language_summary, detected_language, truncated, content_type,
                 topics, themes, keywords, subscription_marketing,
                 english_embedding, multilingual_embedding, raw_email
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s::vector, %s::vector, %s
             ) ON CONFLICT(uid) DO NOTHING;
-        """, [
+        """, (
             rec["uid"],
             rec["datetime"],
             pub_pub,
@@ -84,10 +92,10 @@ def process_uid(uid, rec, config, con_db):
             themes_str,
             keywords_str,
             bool(analysis.get("subscription_marketing")),
-            en_emb,
-            multiling_emb,
+            vector_literal(en_emb),
+            vector_literal(multiling_emb),
             rec["raw_email"]
-        ])
+        ))
         
         if analysis.get("entities"):
             resolve_and_store_entities(rec["uid"], analysis["entities"], con_db)
@@ -100,11 +108,9 @@ def process_uid(uid, rec, config, con_db):
         return False
 
 def check_for_new_emails(client, config):
-    db_path = config.get("db_path", "alpha/newsletters.db")
-    
     # 1. Connect to DB to check existing UIDs
-    con_db = duckdb.connect(db_path)
-    existing_res = con_db.execute("SELECT uid FROM newsletters;").fetchall()
+    con_db = connect_db(config)
+    existing_res = con_db.execute("SELECT uid FROM corpus.newsletters;").fetchall()
     existing_uids = {r[0] for r in existing_res}
     
     # 2. Search Gmail for latest UIDs
@@ -125,6 +131,7 @@ def check_for_new_emails(client, config):
         for uid in new_uids:
             if uid in email_records:
                 process_uid(uid, email_records[uid], config, con_db)
+        con_db.commit()
     else:
         print("No new emails found in the last 7 days search.")
         

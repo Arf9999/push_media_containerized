@@ -548,7 +548,7 @@ async function executeSearch(resetPage = true) {
     resultsList.innerHTML = `
         <div class="empty-state">
             <i class="fa-solid fa-circle-notch fa-spin empty-icon"></i>
-            <p>Searching DuckDB vector space using local array dot products...</p>
+            <p>Searching Postgres vector space...</p>
         </div>
     `;
     
@@ -1263,7 +1263,7 @@ function setWorkspaceTab(tab) {
     }
 }
 
-// Fetch user's saved searches from SQLite
+// Fetch user's saved searches from Postgres
 async function fetchSavedSearches() {
     if (!currentUser) return;
     const listContainer = document.getElementById("saved-searches-list");
@@ -1349,7 +1349,7 @@ async function deleteSavedSearch(id) {
     }
 }
 
-// Fetch user's search history from SQLite
+// Fetch user's search history from Postgres
 async function fetchRecentSearches() {
     if (!currentUser) return;
     const listContainer = document.getElementById("recent-searches-list");
@@ -1633,4 +1633,3 @@ async function loadSearchPage(newOffset) {
     currentSearchOffset = newOffset;
     await executeSearch(false);
 }
-
