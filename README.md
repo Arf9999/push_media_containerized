@@ -100,3 +100,30 @@ semantic search also require provider credentials or a reachable Ollama server.
 
 See [POSTGRES_MIGRATION.md](POSTGRES_MIGRATION.md) for the DuckDB/SQLite parity
 matrix, known non-goals, and reviewer validation commands.
+
+## ECS Deployment
+
+The repository includes `.github/workflows/deploy.yml`, which delegates image
+build/push and ECS rolling updates to the reusable infrastructure workflow:
+`CodeForAfrica/iac-cfa-pulumi/.github/workflows/deploy-fargate-service.yml@main`.
+
+Configure these GitHub repository variables before running the workflow:
+
+- `AWS_REGION` (optional; defaults to `eu-west-1`)
+- `AWS_ROLE_TO_ASSUME`
+- `PUSH_MEDIA_PIPELINE_CONTAINER_NAME` (optional; defaults to `pipeline`)
+- `PUSH_MEDIA_PIPELINE_ECR_REPOSITORY`
+- `PUSH_MEDIA_PIPELINE_ECS_CLUSTER_NAME`
+- `PUSH_MEDIA_PIPELINE_ECS_SERVICE_NAME`
+- `PUSH_MEDIA_PIPELINE_TASK_FAMILY`
+- `PUSH_MEDIA_SURVEY_CONTAINER_NAME` (optional; defaults to `survey`)
+- `PUSH_MEDIA_SURVEY_ECR_REPOSITORY`
+- `PUSH_MEDIA_SURVEY_ECS_CLUSTER_NAME`
+- `PUSH_MEDIA_SURVEY_ECS_SERVICE_NAME`
+- `PUSH_MEDIA_SURVEY_TASK_FAMILY`
+
+The ECS task definitions must already provide runtime configuration and secrets,
+including `DATABASE_URL`, `OPENROUTER_API_KEY`, `OLLAMA_HOST`, model settings,
+and any Gmail credentials. The deploy workflow updates container images on
+existing ECS services; it does not create infrastructure or inject new task
+secrets.

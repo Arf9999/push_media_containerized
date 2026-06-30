@@ -1,0 +1,126 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+  packages: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  validate_config:
+    runs-on: ubuntu-24.04
+    outputs:
+      aws-region: ${{ steps.config.outputs.aws-region }}
+      aws-role-to-assume: ${{ steps.config.outputs.aws-role-to-assume }}
+      pipeline-container-name: ${{ steps.config.outputs.pipeline-container-name }}
+      pipeline-ecr-repository: ${{ steps.config.outputs.pipeline-ecr-repository }}
+      pipeline-ecs-cluster-name: ${{ steps.config.outputs.pipeline-ecs-cluster-name }}
+      pipeline-ecs-service-name: ${{ steps.config.outputs.pipeline-ecs-service-name }}
+      pipeline-task-family: ${{ steps.config.outputs.pipeline-task-family }}
+      survey-container-name: ${{ steps.config.outputs.survey-container-name }}
+      survey-ecr-repository: ${{ steps.config.outputs.survey-ecr-repository }}
+      survey-ecs-cluster-name: ${{ steps.config.outputs.survey-ecs-cluster-name }}
+      survey-ecs-service-name: ${{ steps.config.outputs.survey-ecs-service-name }}
+      survey-task-family: ${{ steps.config.outputs.survey-task-family }}
+    steps:
+      - name: Validate deployment variables
+        id: config
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          PIPELINE_CONTAINER_NAME: ${{ vars.PUSH_MEDIA_PIPELINE_CONTAINER_NAME || 'pipeline' }}
+          PIPELINE_ECR_REPOSITORY: ${{ vars.PUSH_MEDIA_PIPELINE_ECR_REPOSITORY }}
+          PIPELINE_ECS_CLUSTER_NAME: ${{ vars.PUSH_MEDIA_PIPELINE_ECS_CLUSTER_NAME }}
+          PIPELINE_ECS_SERVICE_NAME: ${{ vars.PUSH_MEDIA_PIPELINE_ECS_SERVICE_NAME }}
+          PIPELINE_TASK_FAMILY: ${{ vars.PUSH_MEDIA_PIPELINE_TASK_FAMILY }}
+          SURVEY_CONTAINER_NAME: ${{ vars.PUSH_MEDIA_SURVEY_CONTAINER_NAME || 'survey' }}
+          SURVEY_ECR_REPOSITORY: ${{ vars.PUSH_MEDIA_SURVEY_ECR_REPOSITORY }}
+          SURVEY_ECS_CLUSTER_NAME: ${{ vars.PUSH_MEDIA_SURVEY_ECS_CLUSTER_NAME }}
+          SURVEY_ECS_SERVICE_NAME: ${{ vars.PUSH_MEDIA_SURVEY_ECS_SERVICE_NAME }}
+          SURVEY_TASK_FAMILY: ${{ vars.PUSH_MEDIA_SURVEY_TASK_FAMILY }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          require_var() {
+            local name="$1"
+            local value="${!name:-}"
+            if [[ -z "$value" ]]; then
+              echo "[deploy] ERROR - GitHub variable $name is required." >&2
+              missing=1
+            fi
+          }
+
+          require_var AWS_ROLE_TO_ASSUME
+          require_var PIPELINE_ECR_REPOSITORY
+          require_var PIPELINE_ECS_CLUSTER_NAME
+          require_var PIPELINE_ECS_SERVICE_NAME
+          require_var PIPELINE_TASK_FAMILY
+          require_var SURVEY_ECR_REPOSITORY
+          require_var SURVEY_ECS_CLUSTER_NAME
+          require_var SURVEY_ECS_SERVICE_NAME
+          require_var SURVEY_TASK_FAMILY
+
+          if [[ "$missing" -ne 0 ]]; then
+            echo "[deploy] Configure the missing repository variables before deploying." >&2
+            exit 1
+          fi
+
+          {
+            printf 'aws-region=%s\n' "$AWS_REGION"
+            printf 'aws-role-to-assume=%s\n' "$AWS_ROLE_TO_ASSUME"
+            printf 'pipeline-container-name=%s\n' "$PIPELINE_CONTAINER_NAME"
+            printf 'pipeline-ecr-repository=%s\n' "$PIPELINE_ECR_REPOSITORY"
+            printf 'pipeline-ecs-cluster-name=%s\n' "$PIPELINE_ECS_CLUSTER_NAME"
+            printf 'pipeline-ecs-service-name=%s\n' "$PIPELINE_ECS_SERVICE_NAME"
+            printf 'pipeline-task-family=%s\n' "$PIPELINE_TASK_FAMILY"
+            printf 'survey-container-name=%s\n' "$SURVEY_CONTAINER_NAME"
+            printf 'survey-ecr-repository=%s\n' "$SURVEY_ECR_REPOSITORY"
+            printf 'survey-ecs-cluster-name=%s\n' "$SURVEY_ECS_CLUSTER_NAME"
+            printf 'survey-ecs-service-name=%s\n' "$SURVEY_ECS_SERVICE_NAME"
+            printf 'survey-task-family=%s\n' "$SURVEY_TASK_FAMILY"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "[deploy] OK - deployment variables are present."
+          echo "[deploy] Runtime env/secrets such as DATABASE_URL, OPENROUTER_API_KEY, OLLAMA_HOST, model settings, and Gmail credentials must be defined on the ECS task definitions by the infra stack."
+
+  deploy_pipeline:
+    needs:
+      - validate_config
+    uses: CodeForAfrica/iac-cfa-pulumi/.github/workflows/deploy-fargate-service.yml@main
+    secrets: inherit
+    with:
+      aws-region: ${{ needs.validate_config.outputs.aws-region }}
+      aws-role-to-assume: ${{ needs.validate_config.outputs.aws-role-to-assume }}
+      build-context: pipeline
+      container-name: ${{ needs.validate_config.outputs.pipeline-container-name }}
+      dockerfile-path: pipeline/Dockerfile
+      ecr-repository: ${{ needs.validate_config.outputs.pipeline-ecr-repository }}
+      ecs-cluster-name: ${{ needs.validate_config.outputs.pipeline-ecs-cluster-name }}
+      ecs-service-name: ${{ needs.validate_config.outputs.pipeline-ecs-service-name }}
+      task-family: ${{ needs.validate_config.outputs.pipeline-task-family }}
+
+  deploy_survey:
+    needs:
+      - validate_config
+    uses: CodeForAfrica/iac-cfa-pulumi/.github/workflows/deploy-fargate-service.yml@main
+    secrets: inherit
+    with:
+      aws-region: ${{ needs.validate_config.outputs.aws-region }}
+      aws-role-to-assume: ${{ needs.validate_config.outputs.aws-role-to-assume }}
+      build-context: survey
+      container-name: ${{ needs.validate_config.outputs.survey-container-name }}
+      dockerfile-path: survey/Dockerfile
+      ecr-repository: ${{ needs.validate_config.outputs.survey-ecr-repository }}
+      ecs-cluster-name: ${{ needs.validate_config.outputs.survey-ecs-cluster-name }}
+      ecs-service-name: ${{ needs.validate_config.outputs.survey-ecs-service-name }}
+      task-family: ${{ needs.validate_config.outputs.survey-task-family }}
