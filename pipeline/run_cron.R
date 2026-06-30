@@ -15,9 +15,11 @@ library(DBI)
 if (file.exists("credentials.json")) {
     creds <- jsonlite::read_json("credentials.json")
     for (key in names(creds)) {
-        args <- list(creds[[key]])
-        names(args) <- key
-        do.call(Sys.setenv, args)
+        if (Sys.getenv(key) == "") {
+            args <- list(creds[[key]])
+            names(args) <- key
+            do.call(Sys.setenv, args)
+        }
     }
     message("[Cron] Credentials loaded successfully.")
 } else {
