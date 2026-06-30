@@ -30,6 +30,19 @@ waits for PostgreSQL to become healthy, and then starts the applications.
 
 ### 1. Configuration
 
+`DATABASE_URL` is the single database connection setting used by the pipeline,
+survey, and ingestion job. Docker Compose supplies the local PostgreSQL URL by
+default. To use another PostgreSQL database, set it before starting the stack:
+
+```bash
+export DATABASE_URL='postgresql://user:password@host:5432/database?sslmode=require'
+docker compose --profile jobs up --build -d
+```
+
+Application images do not contain a database URL fallback. Outside local Compose,
+startup fails clearly if `DATABASE_URL` is missing. Startup logs show only the
+database host, port, and database name; credentials are never logged.
+
 1. For ingestion, provide model and source credentials as environment variables
    or place them in `pipeline/credentials.json`:
    ```json

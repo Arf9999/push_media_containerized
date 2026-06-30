@@ -6,6 +6,7 @@ import io
 import logging
 import hashlib
 import psycopg
+from urllib.parse import urlsplit
 from psycopg.rows import dict_row
 from fastapi import FastAPI, HTTPException, Query, Header, status
 from fastapi.staticfiles import StaticFiles
@@ -17,7 +18,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # PostgreSQL connection. In Docker this points at the local postgres service; in AWS
 # it can point at RDS without code changes.
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://pushmedia:pushmedia@postgres:5432/pushmedia")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required.")
 LOG_DIR = os.environ.get("SURVEY_LOG_DIR", os.path.join(BASE_DIR, "logs"))
 LOG_PATH = os.path.join(LOG_DIR, "survey_activity.log")
 
@@ -40,6 +43,14 @@ stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
+
+database_target = urlsplit(DATABASE_URL)
+logger.info(
+    "Database target: %s:%s/%s",
+    database_target.hostname,
+    database_target.port or 5432,
+    database_target.path.lstrip("/"),
+)
 
 # Admin Security Config
 ADMIN_PASSCODE = os.environ.get("SURVEY_ADMIN_PASSCODE", "admin123")

@@ -32,7 +32,6 @@ COPY . .
 EXPOSE 8080
 
 # Environment variables defaults
-ENV DATABASE_URL=postgresql://pushmedia:pushmedia@postgres:5432/pushmedia
 ENV LAST_EMAIL_ID_FILE=/app/data/last_email_id.txt
 ENV FORENSIC_LOG_PATH=/app/data/FORENSIC_LOG
 

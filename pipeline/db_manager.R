@@ -32,8 +32,27 @@ postgres_connect_url <- function(database_url) {
     if (is.null(value) || length(value) == 0 || identical(value, "")) fallback else value
 }
 
-get_db_connection <- function(db_path) {
-    database_url <- Sys.getenv("DATABASE_URL", unset = db_path)
+require_database_url <- function(fallback = "") {
+    database_url <- Sys.getenv("DATABASE_URL", unset = fallback)
+    if (database_url == "") {
+        stop("DATABASE_URL is required.")
+    }
+    database_url
+}
+
+database_target_label <- function(database_url = require_database_url()) {
+    parsed <- httr2::url_parse(database_url)
+    paste0(
+        parsed$hostname,
+        ":",
+        parsed$port %||% "5432",
+        "/",
+        sub("^/", "", parsed$path)
+    )
+}
+
+get_db_connection <- function(db_path = "") {
+    database_url <- require_database_url(db_path)
     con <- NULL
     for (i in 1:60) {
         tryCatch({

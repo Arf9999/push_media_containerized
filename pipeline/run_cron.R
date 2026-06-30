@@ -32,7 +32,8 @@ source("pipeline_runner.R")
 
 # 3. Load Dynamic Sources
 message("[Cron] Loading dynamic sources from Postgres survey.sources...")
-database_url <- Sys.getenv("DATABASE_URL", "postgresql://pushmedia:pushmedia@postgres:5432/pushmedia")
+database_url <- require_database_url()
+message("[Cron] Database target: ", database_target_label(database_url))
 con <- tryCatch({
     postgres_connect_url(database_url)
 }, error = function(e) {

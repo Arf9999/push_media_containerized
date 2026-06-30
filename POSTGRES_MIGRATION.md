@@ -10,6 +10,11 @@ The local image is `pgvector/pgvector:pg16`. Production may supply any compatibl
 PostgreSQL connection through `DATABASE_URL` after enabling the `vector`
 extension.
 
+`DATABASE_URL` is the only application database setting. The literal local URL
+exists once in `docker-compose.yml` as a development fallback. Container images
+require the variable to be injected and do not embed a fallback. Startup logs
+identify only `host:port/database`, never credentials.
+
 ## Functional Parity
 
 | Previous behavior | PostgreSQL implementation |

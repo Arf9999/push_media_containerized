@@ -11,7 +11,10 @@ get_config <- function() {
     
     # DB configuration. Kept as db_path for existing callers; it now carries a
     # Postgres connection string locally and can point at RDS later.
-    db_path <- Sys.getenv("DATABASE_URL", unset = "postgresql://pushmedia:pushmedia@postgres:5432/pushmedia")
+    db_path <- Sys.getenv("DATABASE_URL", unset = "")
+    if (db_path == "") {
+        stop("DATABASE_URL is required.")
+    }
     
     # Helper to traverse manifest JSON safely
     get_manifest_val <- function(manifest, path, default) {

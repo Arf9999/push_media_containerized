@@ -5,6 +5,7 @@ import httpx
 import hashlib
 import secrets
 import psycopg
+from urllib.parse import urlsplit
 from psycopg.rows import dict_row
 from typing import List, Optional
 from fastapi import FastAPI, Query, HTTPException, Header, Depends, Response
@@ -44,7 +45,17 @@ if os.path.exists(manifest_path):
     except Exception as e:
         print(f"Warning: Failed to parse {manifest_path}: {e}")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://pushmedia:pushmedia@postgres:5432/pushmedia")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required.")
+
+database_target = urlsplit(DATABASE_URL)
+print(
+    "Database target: "
+    f"{database_target.hostname}:{database_target.port or 5432}"
+    f"/{database_target.path.lstrip('/')}",
+    flush=True,
+)
 
 def get_pg_conn(rows=None):
     if rows is None:

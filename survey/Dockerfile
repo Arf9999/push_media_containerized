@@ -13,7 +13,6 @@ COPY . .
 EXPOSE 8080
 
 # Configure environment variables to use Postgres
-ENV DATABASE_URL=postgresql://pushmedia:pushmedia@postgres:5432/pushmedia
 ENV SURVEY_LOG_DIR=/app/data/logs
 
 # Run the FastAPI server
