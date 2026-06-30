@@ -227,15 +227,13 @@ async def vectorize_query(query_text: str) -> List[float]:
         
     async with httpx.AsyncClient(timeout=30.0) as client:
         if EMBEDDING_PROVIDER == "openrouter":
-            # Fallback to OpenAI API format
-            api_key = OPENROUTER_API_KEY if OPENROUTER_API_KEY else OPENAI_API_KEY
-            if not api_key:
-                raise HTTPException(status_code=500, detail="No API Key configured for OpenRouter/OpenAI embeddings")
+            if not OPENROUTER_API_KEY:
+                raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY is not configured")
             
-            headers = {"Authorization": f"Bearer {api_key}"}
+            headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
             body = {"model": EMBEDDING_MODEL, "input": query_text}
             
-            resp = await client.post("https://api.openai.com/v1/embeddings", json=body, headers=headers)
+            resp = await client.post("https://openrouter.ai/api/v1/embeddings", json=body, headers=headers)
             if resp.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"Embedding provider error: {resp.text}")
             

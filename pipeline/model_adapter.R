@@ -313,16 +313,12 @@ generate_embeddings <- function(texts, config = NULL, space = "english") {
         }
         
         if (provider == "openrouter") {
-            # OpenRouter typically doesn't host embeddings natively, so we fall back to OpenAI API format
-            # or custom endpoint. Let's build OpenAI/OpenRouter fallback for embeddings.
-            api_key <- ifelse(config$openrouter_api_key != "", config$openrouter_api_key, config$openai_api_key)
-            if (api_key == "") {
-                stop("Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is configured for embeddings.")
+            if (config$openrouter_api_key == "") {
+                stop("OPENROUTER_API_KEY is not configured for embeddings.")
             }
             
-            # Use OpenAI embeddings endpoint (which many API hosts share)
-            req <- httr2::request("https://api.openai.com/v1/embeddings") %>%
-                httr2::req_headers("Authorization" = paste("Bearer", api_key)) %>%
+            req <- httr2::request("https://openrouter.ai/api/v1/embeddings") %>%
+                httr2::req_headers("Authorization" = paste("Bearer", config$openrouter_api_key)) %>%
                 httr2::req_body_json(list(
                     model = model,
                     input = txt

@@ -256,10 +256,26 @@ def generate_embeddings(text, config=None):
         return None
         
     with httpx.Client(timeout=30.0) as client:
-        if provider == "openrouter" or provider == "openai":
-            api_key = config.get("openrouter_api_key") or config.get("openai_api_key")
+        if provider == "openrouter":
+            api_key = config.get("openrouter_api_key")
             if not api_key:
-                raise ValueError("No API key configured for embeddings.")
+                raise ValueError("OPENROUTER_API_KEY is not configured for embeddings.")
+
+            headers = {"Authorization": f"Bearer {api_key}"}
+            body = {
+                "model": model,
+                "input": text
+            }
+            resp = client.post("https://openrouter.ai/api/v1/embeddings", json=body, headers=headers)
+            if resp.status_code != 200:
+                raise Exception(f"Embeddings error: {resp.text}")
+            res_json = resp.json()
+            return res_json["data"][0]["embedding"]
+
+        elif provider == "openai":
+            api_key = config.get("openai_api_key")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY is not configured for embeddings.")
                 
             headers = {"Authorization": f"Bearer {api_key}"}
             body = {
