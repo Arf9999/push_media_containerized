@@ -15,8 +15,6 @@ required_packages <- c(
   "xml2",
   "stringdist",
   "mRpostman",
-  "RSQLite",
-  "httr2",
   "XML",
   "lubridate",
   "stringr",

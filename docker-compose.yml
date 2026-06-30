@@ -35,7 +35,6 @@ services:
       - "8080:8080"
     volumes:
       - ./data:/app/data
-      - ./pipeline/credentials.json:/app/credentials.json:ro
     environment:
       <<: *app-database
       LAST_EMAIL_ID_FILE: /app/data/last_email_id.txt

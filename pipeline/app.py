@@ -20,7 +20,7 @@ load_dotenv()
 
 # Load credentials from credentials.json if it exists
 credentials_path = "credentials.json"
-if os.path.exists(credentials_path):
+if os.path.isfile(credentials_path):
     try:
         with open(credentials_path, "r") as f:
             creds = json.load(f)

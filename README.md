@@ -43,8 +43,9 @@ Application images do not contain a database URL fallback. Outside local Compose
 startup fails clearly if `DATABASE_URL` is missing. Startup logs show only the
 database host, port, and database name; credentials are never logged.
 
-1. For ingestion, provide model and source credentials as environment variables
-   or place them in `pipeline/credentials.json`:
+1. For ingestion, provide model and source credentials as environment variables.
+   For local Docker builds, you can alternatively create
+   `pipeline/credentials.json` before running `docker compose --profile jobs up --build -d`:
    ```json
    {
      "OPENROUTER_API_KEY": "your_openrouter_key",
