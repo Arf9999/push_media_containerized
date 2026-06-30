@@ -1,0 +1,21 @@
+{
+  "project": "newsletter_v2",
+  "version": "1.0",
+  "pipeline_models": {
+    "metadata_extraction": {
+      "provider": "openrouter",
+      "model": "liquid/lfm-2-24b-a2b",
+      "description": "Used for language detection, translation, summarization, entity extraction, and category classification."
+    },
+    "vector_embeddings": {
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "description": "Used to generate 768-dimensional dual-space embeddings (English and Multilingual) for semantic vector search."
+    },
+    "translation_evaluation": {
+      "provider": "openrouter",
+      "model": "liquid/lfm-2-24b-a2b",
+      "description": "LLM-as-a-judge model used to evaluate translation accuracy, nuance, and rhetorical fidelity."
+    }
+  }
+}
