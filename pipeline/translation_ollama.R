@@ -17,9 +17,12 @@
 #' @return Translated English text string.
 #' @export
 translate_ollama <- function(text, lang, model_name = "mzansilm") {
-  # Compute cache key
   key <- digest::digest(list(text = text, lang = lang, model = model_name), algo = "sha256")
-  cache_db <- file.path('alpha', 'ollama_cache.db')
+  cache_dir <- ifelse(dir.exists("data"), "data", "alpha")
+  if (!dir.exists(cache_dir)) {
+    dir.create(cache_dir, recursive = TRUE)
+  }
+  cache_db <- file.path(cache_dir, 'ollama_cache.db')
   if (!file.exists(cache_db)) {
     con_create <- DBI::dbConnect(RSQLite::SQLite(), cache_db)
     DBI::dbExecute(con_create, 'CREATE TABLE cache (key TEXT PRIMARY KEY, translation TEXT)')

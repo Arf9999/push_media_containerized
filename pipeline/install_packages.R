@@ -16,7 +16,11 @@ required_packages <- c(
   "mRpostman",
   "RSQLite",
   "httr2",
-  "XML"
+  "XML",
+  "lubridate",
+  "stringr",
+  "readr",
+  "magrittr"
 )
 
 install_if_missing <- function(pkg) {
